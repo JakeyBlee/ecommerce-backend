@@ -1,0 +1,572 @@
+openapi: 3.0.1
+info:
+  title: E-Commerce Application
+  version: 1.0.0
+  description: >-
+    The backend for an e-commerce application to store users, products and
+    orders and allow for CRUD operations on each.
+  contact:
+    name: Jacob Blackburn
+    email: jakeyblee@gmail.com
+paths:
+  /register:
+    summary: Endpoint solely for registering new users in the database.
+    description: >-
+      Used to all a new user with a hashed password into the PostgreSQL
+      database.
+    post:
+      summary: Creates a new user for the application.
+      description: >-
+        Creates a new user with a unique username and a password so that orders
+        placed can be attributed to individuals. Also allows for administrative
+        authorization to let users look at the details of other accounts.
+      operationId: register_user
+      responses:
+        '201':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: User created successfully.
+          description: Success
+        '400':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Error:
+                  value: Username already exists
+            application/json:
+              examples:
+                error:
+                  value: |-
+                    {
+                      "error": "Username already exists"
+                    }
+          description: Name already exists in database.
+      tags:
+        - authentication
+        - users
+  /login:
+    summary: Endpoint for logging in to the application through express.passport
+    post:
+      summary: Logs a user into the application through express.passport
+      description: >-
+        Uses the local strategy to authenticate a login through comparing hashed
+        password entry to a stored hashed password.
+      operationId: login_user
+      responses:
+        '200':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                message:
+                  value: OK. Redirecting to '/'
+          description: Success
+      tags:
+        - authentication
+  /logout:
+    summary: Endpoint for logging out of the application through express.passport
+    post:
+      summary: Logs a user out of the application through express.passport
+      description: >-
+        Uses the local strategy to authenticate a logout, which also deletes
+        local session data and removes authorization to view data. POST to avoid
+        accidental/malicious logouts.
+      operationId: logout_user
+      responses:
+        '200':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                message:
+                  value: OK. Redirecting to '/'
+          description: Success
+      tags:
+        - authentication
+  /users:
+    summary: Endpoint for a specific user.
+    description: >-
+      Used for updating user information and deleting users from the attached
+      PostgreSQL database.
+    get:
+      summary: Retrieves the data stored for the individual user.
+      description: >-
+        Used for comparing login details in order to authenticate a user prior
+        to logging in.
+      operationId: get_users
+      tags:
+        - users
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                success:
+                  value: |-
+                    [
+                      {
+                        "id": 1,
+                        "username": "user1",
+                        "password": "$2b$10$BtSyO/41/NXwysIsqAyBluEkNCEP5mLrbwvhNE7ozRvuNLc4jFNJO",
+                        "isAdmin": false
+                      },
+                      {
+                        "id": 2,
+                        "username": "user2",
+                        "password": "$2b$10$Qp8Zg1jkf8H9Dx.PZbai8ONJH0LSPXBnogtFH7ntFiA4BMYBIpy8y",
+                        "isAdmin": true
+                      }
+                    ]
+          description: Success
+  /users/{id}:
+    summary: Endpoint for a specific user.
+    description: >-
+      Used for updating user information and deleting users from the attached
+      PostgreSQL database.
+    parameters:
+      - name: id
+        in: path
+        description: The id of the user.
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Retrieves the data stored for the individual user.
+      description: >-
+        Used for comparing login details in order to authenticate a user prior
+        to logging in.
+      operationId: get_user
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                success:
+                  value: |-
+                    {
+                        "id": 1,
+                        "username": "user1",
+                        "password": "$2b$10$BtSyO/41/NXwysIsqAyBluEkNCEP5mLrbwvhNE7ozRvuNLc4jFNJO",
+                        "isAdmin": false
+                      }
+          description: Success
+      tags:
+        - users
+    put:
+      summary: Updates data stored for individual users.
+      description: Used to update a users password with a new hashed entry.
+      operationId: update_user
+      responses:
+        '200':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: Password updated successfully.
+          description: Success
+        '400':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Error:
+                  value: Invalid user ID.
+          description: Invalid Argument Provided
+      tags:
+        - users
+    delete:
+      summary: Deletes a specific user.
+      description: >-
+        Used to delete all stored data for a specific user within the linked
+        PostgreSQL database, and then proceeds to log out the user to remove the
+        local session data.
+      operationId: delete_user
+      parameters:
+        - name: id
+          in: path
+          description: The id of the user.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: User deleted successfully.
+          description: Success
+        '400':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Error:
+                  value: Invalid user ID.
+            application/json:
+              examples:
+                Error:
+                  value: |-
+                    {
+                      "message": "Error: User does not exist"
+                    }
+          description: Invalid Argument Provided
+      tags:
+        - users
+  /products:
+    summary: Endpoint for accessing all products in the database.
+    description: Used to return a list of all products from the linked PostgreSQL database.
+    get:
+      summary: Returns all products stored in the database.
+      description: >-
+        Used to return all data for every item stored within the linked
+        PostgreSQL database.
+      operationId: get_products
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                success:
+                  value: |-
+                    [
+                      {
+                        "id": 1,
+                        "name": "product1",
+                        "description": "A test product.",
+                        "image": "image.url",
+                        "cost": 1.32,
+                        "stock_count": 3
+                      },
+                      {
+                        "id": 2,
+                        "name": "product2",
+                        "description": "A test product.",
+                        "image": "image.url",
+                        "cost": 1.65,
+                        "stock_count": 5
+                      }
+                    ]
+          description: Success
+      tags:
+        - products
+  /products/{id}:
+    summary: Endpoint for accessing a specific product in the database.
+    description: >-
+      Used to return the data for a single specified product from the linked
+      PostgreSQL database.
+    parameters:
+      - name: id
+        in: path
+        description: The id of the product.
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Returns data for a specific product.
+      description: >-
+        Used to retrieve data for a specific product stored within the linked
+        database.
+      operationId: get_product
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                success:
+                  value: |-
+                    {
+                        "id": 1,
+                        "name": "product1",
+                        "description": "A test product.",
+                        "image": "image.url",
+                        "cost": 1.32,
+                        "stock_count": 3
+                      }
+          description: Success
+      tags:
+        - products
+  /orders:
+    summary: Endpoint for accessing all orders in the database.
+    description: Used to return a list of all orders from the linked PostgreSQL database.
+    get:
+      summary: Returns previously submitted orders.
+      description: >-
+        Used to return previous orders stored within the database. Can be
+        filtered to be specific to users.
+      operationId: get_all_orders
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                success:
+                  value: |-
+                    [
+                      {
+                        "id": 291,
+                        "user_id": 55
+                      },
+                      {
+                        "id": 242,
+                        "user_id": 64
+                      }
+                    ]
+          description: Success
+      tags:
+        - orders
+  /orders/{user_id}:
+    summary: Endpoint for accessing orders relating to a specified user.
+    description: Used to access data relating to the orders made by a single user.
+    parameters:
+      - name: user_id
+        in: path
+        description: The id of a specific user.
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Returns order data for a specified user.
+      description: Used to retrieve order for a specified user by user_id.
+      operationId: get_users_orders
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                success:
+                  value: |-
+                    [
+                      {
+                        "id": 291,
+                        "user_id": 2
+                      },
+                      {
+                        "id": 252,
+                        "user_id": 2
+                      }
+                    ]
+          description: Success
+        '400':
+          content:
+            application/json:
+              examples:
+                error:
+                  value: |-
+                    {
+                      "message": "Error: Invalid order request"
+                    }
+          description: Failure
+      tags:
+        - orders
+  /orders/{user_id}/{order_id}:
+    summary: Endpoint for accessing orders relating to a specified user.
+    description: Used to access detailed data regarding a specific order.
+    parameters:
+      - name: user_id
+        in: path
+        description: The id of a specific user.
+        required: true
+        schema:
+          type: string
+      - name: order_id
+        in: path
+        description: The id of a specific order.
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Returns detailed data regarding a specific order.
+      description: >-
+        Used to details of the products contained within a specified single
+        order.
+      operationId: get_order
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                success:
+                  value: |-
+                    [
+                      {
+                        "order_id": 21,
+                        "product_id": 2,
+                        "quantity": 20
+                      },
+                      {
+                        "order_id": 21,
+                        "product_id": 1,
+                        "quantity": 40
+                      }
+                    ]
+          description: Success
+        '400':
+          content:
+            application/json:
+              examples:
+                error:
+                  value: |-
+                    {
+                      "message": "Error: Invalid order request"
+                    }
+          description: Failure
+      tags:
+        - orders
+  /cart/{user_id}:
+    summary: Endpoint for accessing items currently stored in the carts of users.
+    description: >-
+      Used to access the list of all items currently placed in carts  from the
+      linked PostgreSQL database.
+    parameters:
+      - name: user_id
+        in: path
+        description: The id of the user that the cart belongs to.
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Returns all items currently in a user's cart.
+      description: >-
+        Returns a list filtered by current active user of items present in their
+        shopping cart.
+      operationId: get_cart
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                success:
+                  value: |-
+                    [
+                      {
+                        "user_id": 27,
+                        "product_id": 3,
+                        "quantity": 1
+                      },
+                      {
+                        "user_id": 27,
+                        "product_id": 1,
+                        "quantity": 1
+                      },
+                      {
+                        "user_id": 27,
+                        "product_id": 2,
+                        "quantity": 1
+                      }
+                    ]
+          description: Success
+      tags:
+        - cart
+    post:
+      summary: Adds a new item to the a user's cart.
+      description: >-
+        Adds a new item along with a quantity variable to the current user's
+        cart.
+      operationId: post_cart
+      responses:
+        '200':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: Item added to cart.
+          description: Success
+      tags:
+        - cart
+    delete:
+      summary: Removes an item from the user's cart.
+      description: Used to remove a single, or multiple items from the current user's cart.
+      operationId: delete_cart
+      responses:
+        '204':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: Changes made successfully.
+          description: Success
+      tags:
+        - cart
+  /cart/{user_id}/{product_id}:
+    summary: Endpoint for accessing data regarding a single item in a users cart.
+    parameters:
+      - name: user_id
+        in: path
+        description: The id of the user.
+        required: true
+        schema:
+          type: string
+      - name: product_id
+        in: path
+        description: The id of the product.
+        required: true
+        schema:
+          type: string
+    put:
+      summary: Used to change details of a cart item, specifically its quantity.
+      description: >-
+        Used to edit the quantity of an item currently in a users cart. If this
+        is changed to 0, instead a DELETE operation is used.
+      operationId: update_cart
+      responses:
+        '200':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: Changes made successfully.
+          description: Success
+      tags:
+        - cart
+    delete:
+      summary: Used to remove an item from a users cart.
+      description: >-
+        Used to remove the row relating to this product_id from a users cart. Is
+        also called if a quantity is PUT to 0.
+      operationId: delete_cart_item
+      responses:
+        '204':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: Changes made successfully.
+          description: Success
+      tags:
+        - cart
+  /cart/{user_id}/checkout:
+    summary: >-
+      Endpoint for validating a cart, authenticating payment a new creating a
+      new order.
+    description: >-
+      A unique endpoint accessed via POST to handle the processing of an order.
+      Details specified under POST description.
+    parameters:
+      - name: user_id
+        in: path
+        description: The id of the user that the cart belongs to.
+        required: true
+        schema:
+          type: string
+    post:
+      summary: >-
+        Creates a new order from the current user's cart, updates stock levels
+        and empties the cart.
+      description: >-
+        This is used to check the cart items and ensure there is adequate stock
+        to complete an order. Should this be true, the items in the cart are
+        given a unique order ID, and in a separate table this order_id is
+        assigned to the user. On successful migration of data across tables, the
+        stock is depleted from the recorded product stock_levels and the current
+        users cart is emptied.
+      operationId: post_order
+      responses:
+        '200':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: Order successfully submitted
+          description: Success
+      tags:
+        - orders
+        - cart

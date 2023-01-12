@@ -1,0 +1,23 @@
+{
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "connect-pg-simple": "^8.0.0",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "nodemon": "^2.0.20",
+    "passport": "^0.6.0",
+    "passport-local": "^1.0.0",
+    "pg": "^8.8.0"
+  },
+  "name": "ecommerce-backend",
+  "version": "1.0.0",
+  "description": "The backend for a simple e-commerce application.",
+  "main": "app.js",
+  "scripts": {
+    "test": "test",
+    "start": "nodemon app.js"
+  },
+  "author": "Jacob Blackburn",
+  "license": "ISC"
+}
