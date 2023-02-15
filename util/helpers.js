@@ -1,5 +1,13 @@
+const AWS = require('aws-sdk');
 const db = require('../db/index');
 const bcrypt = require('bcrypt');
+
+const s3 = new AWS.S3({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    signatureVersion: 'v4',
+    region: 'eu-west-2',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+});
 
 // Authentication middleware
 function checkAuthenticated (req, res, next) {
@@ -7,7 +15,7 @@ function checkAuthenticated (req, res, next) {
         next();
     } else {
         console.log('Log in required');
-        res.redirect('/login');
+        res.status(403).json({message: 'Log in required'});
     }
 };
 
@@ -17,7 +25,7 @@ function checkAuthorized (req, res, next) {
         next();
     } else {
         console.log('Unauthorized to view/edit other accounts');
-        res.status(400).send({ "error": "Unauthorized access" });
+        res.status(400).json({message: 'Unauthorized access'});
     }
 };
 
@@ -36,10 +44,10 @@ function checkUsernameUnique(username) {
     })
 };
 
-// Checks a row exists in the users table for a specific user_id
-function checkEntryExists(table, id) {
+// Checks a user exists in the users table for a specific user_id
+function checkEntryExists(id) {
     return new Promise((resolve, reject) => {
-        db.query(`SELECT * FROM ${table} WHERE id = $1`, [id], (err, results) => {
+        db.query(`SELECT * FROM users WHERE id = $1`, [id], (err, results) => {
             if(err) {
                 reject(err);
             } else if(results.rowCount!==0) {
@@ -52,13 +60,14 @@ function checkEntryExists(table, id) {
 };
 
 // Creates a new account within the database
-async function registerUser(username, password) {
+async function registerUser(username, password, firstName, lastName) {
     try {
         let hashedPassword = await bcrypt.hash(password, 10);
         let noUser = await checkUsernameUnique(username);
         if(noUser){
+            console.log('attempt')
             return new Promise ((resolve, reject) => {
-                db.query('INSERT INTO users(username, password) VALUES($1, $2)', [username, hashedPassword], (err, res) => {
+                db.query('INSERT INTO users(username, password, first_name, last_name) VALUES($1, $2, $3, $4)', [username, hashedPassword, firstName, lastName], (err, res) => {
                     if(err) {
                         reject(err);
                     } else {
@@ -67,7 +76,7 @@ async function registerUser(username, password) {
                 })
             })
         } else {
-            throw new Error('User already exists');
+            throw new Error('Username already in use');
         }
     } catch(err){
         throw new Error(err);
@@ -78,7 +87,7 @@ async function registerUser(username, password) {
 async function changeUserPassword(user_id, newPassword) {
     try {
         let newHashedPassword = await bcrypt.hash(newPassword, 10);
-        let exists = await checkEntryExists('users', user_id);
+        let exists = await checkEntryExists(user_id);
         if(exists){
             return new Promise((resolve, reject) => {
                 db.query(`UPDATE users SET password = $2 WHERE id = $1`, [user_id, newHashedPassword], (err) => {
@@ -123,35 +132,27 @@ function getEntryById(table, id) {
     })
 };
 
-// Deletes a single user from a specified table by primary key ID
-async function deleteUserById(user_id) {
-    try {
-        let exists = await checkUserExists(user_id);
-        if(exists){
-            return new Promise((resolve, reject) => {
-                db.query('DELETE FROM users WHERE id = $1', [user_id], (err) => {
-                    if(err) {
-                        reject(err);
-                    } else {
-                        resolve('Delete successful');
-                    }
-                })
-            })
-        } else {
-            throw new Error('User does not exist');
-        }
-    } catch(err){
-        throw new Error(err);
+// Gets the image url from the AWS S3 server valid for 1 hour
+function getImageUrl(filename) {
+    if(!filename){
+        return;
     }
+    const myBucket = 'friendsofthethread';
+    const myKey = filename;
+    return s3.getSignedUrl('getObject', {
+        Bucket: myBucket,
+        Key: myKey,
+        Expires: 60 * 60
+    });
 };
 
-// Gets the items in the users cart
+// Gets the items in the stored users cart
 async function getUserCart(user_id) {
     try {
-        let userExists = await checkEntryExists('users', user_id);
+        let userExists = await checkEntryExists(user_id);
         if(userExists){
             return new Promise((resolve, reject) => {
-                db.query('SELECT * FROM cart_items WHERE user_id = $1', [user_id], (err, results) => {
+                db.query('SELECT product_id as id, cost, image, quantity FROM cart_items, products WHERE products.id = cart_items.product_id AND user_id = $1', [user_id], (err, results) => {
                     if(err) {
                         reject(err);
                     } else {
@@ -193,8 +194,63 @@ function deleteCart(user_id) {
     })
 };
 
+// Updates database cart with client cart pre login
+async function updateWholeCart(user_id, data) {
+    try {
+        for(const item of data){
+            await addToCart(user_id, item.id, item.quantity);
+        }
+        const cart = await getUserCart(user_id);
+        return cart.rows;
+    } catch(err){
+        throw new Error(err);
+    }
+};
+
+// Adds one onto the quantity of an item in the users cart
+async function addOneToCart(user_id, product_id, quantity) {
+    const cart = await getUserCart(user_id);
+    const item = cart.rows.find(item => item.id === product_id);
+    if(item) {
+        // If product_id already exists in cart
+        return await updateItemCart(user_id, product_id, item.quantity+quantity);
+    } else {
+        // If no current row with product_id exists
+        return new Promise((resolve, reject) => {
+            db.query('INSERT INTO cart_items(user_id, product_id, quantity) VALUES($1, $2, $3)', [user_id, product_id, quantity], (err, res) => {
+                if(err) {
+                    reject(err);
+                } else {
+                    resolve('Item added to cart');
+                }
+            })
+        })
+    }
+};
+
+// Adds an item with a set quantity to the users cart
+async function addToCart(user_id, product_id, quantity) {
+    const cart = await getUserCart(user_id);
+    const item = cart.rows.find(item => item.id === product_id);
+    if(item) {
+        // If product_id already exists in cart
+        return await updateItemCart(user_id, product_id, quantity);
+    } else {
+        // If no current row with product_id exists
+        return new Promise((resolve, reject) => {
+            db.query('INSERT INTO cart_items(user_id, product_id, quantity) VALUES($1, $2, $3)', [user_id, product_id, quantity], (err, res) => {
+                if(err) {
+                    reject(err);
+                } else {
+                    resolve('Item added to cart');
+                }
+            })
+        })
+    }
+};
+
 // Updates quantity of item already in cart
-async function updateCart(user_id, product_id, quantity) {
+async function updateItemCart(user_id, product_id, quantity) {
     if(quantity === 0) {
         // If new quantity warrants removal from cart
         return await deleteCartItem(user_id, product_id)
@@ -211,80 +267,42 @@ async function updateCart(user_id, product_id, quantity) {
     } 
 };
 
-// Adds an item with a set quantity to the users cart
-async function addToCart(user_id, product_id, quantity) {
-    const cart = await getUserCart(user_id);
-    const item = cart.rows.find(item => item.product_id === product_id)
-    if(item) {
-        // If product_id already exists in cart
-        return await updateCart(user_id, product_id, quantity+item.quantity);
-    } else {
-        // If no current row with product_id exists
+async function getOrderProducts(order_id){
+    try {
         return new Promise((resolve, reject) => {
-            db.query('INSERT INTO cart_items(user_id, product_id, quantity) VALUES($1, $2, $3)', [user_id, product_id, quantity], (err, res) => {
-                if(err) {
-                    reject(err);
+            db.query("SELECT orders.id, products.name, products.image, products.cost, orders_products.quantity FROM products, orders, orders_products WHERE products.id = orders_products.product_id AND orders_products.order_id = orders.id AND orders.id = $1", [order_id], (err, results) =>{
+                if(err){
+                    reject(err)
                 } else {
-                    resolve('Item added to cart');
+                    resolve(results)
                 }
             })
         })
+    } catch(err) {
+        throw new Error(err);
     }
 };
 
-// Gets orders dependant on supplied parameters
-async function getOrders(user_id, order_id){
-    if(user_id && order_id) {
-        try {
-            let userExists = await checkEntryExists('users', user_id);
-            let orderExists = await checkEntryExists('orders', user_id);
-            if(userExists && orderExists){
-                return new Promise((resolve, reject) => {
-                    db.query('SELECT * FROM orders_products WHERE order_id = $1', [order_id], (err, results) => {
-                        if(err) {
-                            reject(err);
-                        } else {
-                            resolve(results);
-                        }
-                    })
+async function getOrders(user_id){
+    try {
+        let userExists = await checkEntryExists(user_id);
+        if(userExists){
+            return new Promise((resolve, reject) => {
+                db.query('SELECT id, date, total_cost FROM orders WHERE user_id = $1', [user_id], (err, results) => {
+                    if(err) {
+                        reject(err);
+                    } else {
+                        resolve(results);
+                    }
                 })
-            } else {
-                throw new Error('Invalid order request');
-            }
-        } catch(err){
-            throw new Error(err);
-        }
-    } else if (user_id && !order_id) {
-        try {
-            let userExists = await checkEntryExists('users', user_id);
-            if(userExists){
-                return new Promise((resolve, reject) => {
-                    db.query('SELECT * FROM orders WHERE user_id = $1', [user_id], (err, results) => {
-                        if(err) {
-                            reject(err);
-                        } else {
-                            resolve(results);
-                        }
-                    })
-                })
-            } else {
-                throw new Error('Invalid order request');
-            }
-        } catch(err){
-            throw new Error(err);
-        }
-    } else {
-        return new Promise((resolve, reject) => {
-            db.query('SELECT * FROM orders', (err, results) => {
-                if(err) {
-                    reject(err);
-                } else {
-                    resolve(results);
-                }
             })
-        })
+        } else {
+            throw new Error('Invalid order request');
+        }
+    } catch(err){
+        throw new Error(err);
     }
-};
+}
 
 // Checks there is enough stock of a product to make an order
 function checkStock(product_id, buyQuantity) {
@@ -315,14 +333,14 @@ function decreaseStock(product_id, buyQuantity) {
 };
 
 // Transfers current cart data into orders with unique ID and deletes current cart
-async function checkoutCart(user_id) {
+async function checkoutCart(user_id, date, total_cost) {
     try {
         const cart = await getUserCart(user_id);
-        await Promise.all(cart.rows.map(x => checkStock(x.product_id, x.quantity)));
+        await Promise.all(cart.rows.map(x => checkStock(x.id, x.quantity)));
         // if stock exists then order proceeds
         return new Promise((resolve, reject) => {
                 // Order is listed within orders table and attributed to user
-                db.query('INSERT INTO orders(user_id) VALUES($1) RETURNING id', [user_id], (err, res) => {
+                db.query('INSERT INTO orders(user_id, date, total_cost) VALUES($1, $2, $3) RETURNING id', [user_id, date, total_cost], (err, res) => {
                     if(err) {
                         reject(err);
                     } else {
@@ -332,7 +350,7 @@ async function checkoutCart(user_id) {
                                 reject(err);
                             } else {
                                 // Stock is decreased for products in database
-                                Promise.all(cart.rows.map(x => decreaseStock(x.product_id, x.quantity)));
+                                Promise.all(cart.rows.map(x => decreaseStock(x.id, x.quantity)));
                                 // Cart is emptied
                                 deleteCart(user_id);
                                 resolve('Order successfully submitted');
@@ -353,13 +371,15 @@ module.exports = {
     registerUser: registerUser,
     changeUserPassword: changeUserPassword,
     getAllEntries: getAllEntries,
+    getImageUrl: getImageUrl,
     getEntryById: getEntryById,
-    deleteUserById: deleteUserById,
     getUserCart: getUserCart,
     deleteCartItem: deleteCartItem,
     deleteCart: deleteCart,
-    updateCart: updateCart,
+    updateWholeCart: updateWholeCart,
+    addOneToCart: addOneToCart,
     addToCart: addToCart,
     getOrders: getOrders,
+    getOrderProducts: getOrderProducts,
     checkoutCart: checkoutCart
 };

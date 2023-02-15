@@ -22,42 +22,44 @@ passport.use(new LocalStrategy(
         })
     }
 ));
+
 passport.serializeUser((user, done) => {
-    done(null, user.rows[0].id);
+  done(null, user.rows[0].id);
 });
 passport.deserializeUser((id, done) => {
-    db.query(`SELECT * FROM users WHERE id = $1`, [id], (err, user) => {
-    if(err) return done(err);
-    done(null, user);
-    })
+  db.query(`SELECT * FROM users WHERE id = $1`, [id], (err, user) => {
+  if(err) return done(err);
+  done(null, user);
+  })
 });
 
 router.post('/register', async (req, res, next) => {
     let username = req.body.username;
     let password = req.body.password;
+    let firstName = req.body.firstName;
+    let lastName = req.body.lastName;
     try {
-        await registerUser(username, password);
-        res.status(201).send(req.body);
+        await registerUser(username, password, firstName, lastName);
+        res.status(201).json({message: 'Account created successfully'});
         console.log('User registered successfully.');
     } catch(err) {
-        console.log(err);
-        res.status(400).send({ message: err.message });
+        console.log(err)
+        res.status(400).json({message: err.message});
     }
 });
-router.post('/login',
-    passport.authenticate('local', {failureRedirect: "/login"}),
+router.post('/login', passport.authenticate('local', {failureRedirect: "/login"}),
     (req, res, next) => {
         req.session.authenticated = true;
+        res.status(200).json({username: req.body.username, userID: req.session.passport.user});
         console.log('Login success.');
-        res.redirect(200, '/');
     }
 );
 router.post('/logout', (req, res, next) => {
     req.logout(function(err) {
         if(err) return next(err);
+        res.status(200).json({message: 'Logged Out'});
         console.log('Logout Success.');
-        res.redirect(200, '/login');
     })
 });
 
-module.exports = router;
+module.exports = router, passport;

@@ -5,9 +5,6 @@ info:
   description: >-
     The backend for an e-commerce application to store users, products and
     orders and allow for CRUD operations on each.
-  contact:
-    name: Jacob Blackburn
-    email: jakeyblee@gmail.com
 paths:
   /register:
     summary: Endpoint solely for registering new users in the database.
@@ -83,41 +80,6 @@ paths:
           description: Success
       tags:
         - authentication
-  /users:
-    summary: Endpoint for a specific user.
-    description: >-
-      Used for updating user information and deleting users from the attached
-      PostgreSQL database.
-    get:
-      summary: Retrieves the data stored for the individual user.
-      description: >-
-        Used for comparing login details in order to authenticate a user prior
-        to logging in.
-      operationId: get_users
-      tags:
-        - users
-      responses:
-        '200':
-          content:
-            application/json:
-              examples:
-                success:
-                  value: |-
-                    [
-                      {
-                        "id": 1,
-                        "username": "user1",
-                        "password": "$2b$10$BtSyO/41/NXwysIsqAyBluEkNCEP5mLrbwvhNE7ozRvuNLc4jFNJO",
-                        "isAdmin": false
-                      },
-                      {
-                        "id": 2,
-                        "username": "user2",
-                        "password": "$2b$10$Qp8Zg1jkf8H9Dx.PZbai8ONJH0LSPXBnogtFH7ntFiA4BMYBIpy8y",
-                        "isAdmin": true
-                      }
-                    ]
-          description: Success
   /users/{id}:
     summary: Endpoint for a specific user.
     description: >-
@@ -170,44 +132,6 @@ paths:
               examples:
                 Error:
                   value: Invalid user ID.
-          description: Invalid Argument Provided
-      tags:
-        - users
-    delete:
-      summary: Deletes a specific user.
-      description: >-
-        Used to delete all stored data for a specific user within the linked
-        PostgreSQL database, and then proceeds to log out the user to remove the
-        local session data.
-      operationId: delete_user
-      parameters:
-        - name: id
-          in: path
-          description: The id of the user.
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Message:
-                  value: User deleted successfully.
-          description: Success
-        '400':
-          content:
-            text/plain; charset=utf-8:
-              examples:
-                Error:
-                  value: Invalid user ID.
-            application/json:
-              examples:
-                Error:
-                  value: |-
-                    {
-                      "message": "Error: User does not exist"
-                    }
           description: Invalid Argument Provided
       tags:
         - users
@@ -284,35 +208,6 @@ paths:
           description: Success
       tags:
         - products
-  /orders:
-    summary: Endpoint for accessing all orders in the database.
-    description: Used to return a list of all orders from the linked PostgreSQL database.
-    get:
-      summary: Returns previously submitted orders.
-      description: >-
-        Used to return previous orders stored within the database. Can be
-        filtered to be specific to users.
-      operationId: get_all_orders
-      responses:
-        '200':
-          content:
-            application/json:
-              examples:
-                success:
-                  value: |-
-                    [
-                      {
-                        "id": 291,
-                        "user_id": 55
-                      },
-                      {
-                        "id": 242,
-                        "user_id": 64
-                      }
-                    ]
-          description: Success
-      tags:
-        - orders
   /orders/{user_id}:
     summary: Endpoint for accessing orders relating to a specified user.
     description: Used to access data relating to the orders made by a single user.
@@ -476,6 +371,23 @@ paths:
       summary: Removes an item from the user's cart.
       description: Used to remove a single, or multiple items from the current user's cart.
       operationId: delete_cart
+      responses:
+        '204':
+          content:
+            text/plain; charset=utf-8:
+              examples:
+                Message:
+                  value: Changes made successfully.
+          description: Success
+      tags:
+        - cart
+    put:
+      summary: Merges the offline cart with a users saved cart on login.
+      description: >-
+        Retrieves the users stored cart on the database, and combines it with
+        new items that were added to the local basket whilst the user was not
+        logged in.
+      operationId: merge_carts
       responses:
         '204':
           content:
